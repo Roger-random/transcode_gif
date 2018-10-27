@@ -7,10 +7,14 @@ print()
 print("/* Generated from poptartcat.gif */")
 print()
 
+reduction = 1 # 1 = full resolution, 2 = half, 4 = quarter, which looks pretty bad.
+screenwidth = 320
+screenheight= 240
+
 # Extract palette (happens to be common to all frames for this GIF)
 numcolors = len(catgif.getcolors())
 
-print("const uint32_t cat_palette[{}] = {{".format(numcolors))
+print("const uint32_t cat{}_palette[{}] = {{".format(reduction,numcolors))
 
 palette = catgif.getpalette()
 
@@ -25,8 +29,9 @@ frame = 0
 
 try:
   while True:
-    scale320 = catgif.resize((320,320),resample=Image.NEAREST)
-    crop240 = scale320.crop((0,40,320,280))
+    scaled = catgif.resize((int(screenwidth/reduction),int(screenwidth/reduction)),resample=Image.NEAREST)
+    cropoffsety = int((screenwidth-screenheight)/(2*reduction))
+    cropped = scaled.crop((0,cropoffsety,int(screenwidth/reduction),int(screenheight/reduction)+cropoffsety))
 
     # Scan frame line-by-line, encode pixels via simple run-length encoding
 
@@ -35,9 +40,9 @@ try:
     currentcolor = None
     currentcount = 0
 
-    for y in range(240):
-      for x in range(320):
-        pixel = crop240.getpixel((x,y))
+    for y in range(int(240/reduction)):
+      for x in range(int(320/reduction)):
+        pixel = cropped.getpixel((x,y))
         if pixel == currentcolor:
           currentcount = currentcount + 1
         else:
@@ -50,7 +55,7 @@ try:
         rlepixels.append((currentcolor, currentcount))
         currentcount = 0
 
-    print("const uint16_t cat_frame{}[{}] = {{".format(frame,len(rlepixels)))
+    print("const uint16_t cat{}_frame{}[{}] = {{".format(reduction,frame,len(rlepixels)))
 
     numperline = 0
 
@@ -73,9 +78,9 @@ try:
 except EOFError:
   pass # No more frames in GIF
 
-print("const uint16_t* cat_frames[{}] = {{".format(frame))
+print("const uint16_t* cat{}_frames[{}] = {{".format(reduction,frame))
 
 for f in range(frame):
-  print("  cat_frame{},".format(f))
+  print("  cat{}_frame{},".format(reduction,f))
 
 print("};")
