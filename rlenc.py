@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 from PIL import Image # https://pillow.readthedocs.io
+import math
 
 catgif = Image.open("poptartcat.gif")
 
@@ -7,7 +8,7 @@ print()
 print("/* Generated from poptartcat.gif */")
 print()
 
-reduction = 1 # 1 = full resolution, 2 = half, 4 = quarter, which looks pretty bad.
+reduction = 4 # 1 = full resolution, 2 = half, 4 = quarter, which is still recognizable, 8 = unusable
 screenwidth = 320
 screenheight= 240
 
@@ -55,18 +56,40 @@ try:
         rlepixels.append((currentcolor, currentcount))
         currentcount = 0
 
-    print("const uint16_t cat{}_frame{}[{}] = {{".format(reduction,frame,len(rlepixels)))
+    # Each run length encode takes 3 bytes, but the final one may spill into
+    # an extra byte so we need to round up.
+    numbytes = len(rlepixels) + math.ceil(len(rlepixels)/2)
+
+    print("const uint8_t cat{}_frame{}[{}] = {{".format(reduction,frame,numbytes))
 
     numperline = 0
+    remaindernibble = None
 
     print("  ",end="")
     for encpixel in rlepixels:
-      print("0x{:01X}{:03X}, ".format(*encpixel),end="")
-      numperline = numperline + 1
-      if numperline >= 10:
+      pixelcolor =    encpixel[0] & 0xF
+      pixelcountmsb = (encpixel[1]>>4) & 0xF
+      pixelcountlsb = encpixel[1] & 0xF
+      if remaindernibble is not None:
+        print("0x{:02X},".format((remaindernibble<<4) | pixelcolor),end="")
+        numperline = numperline + 1
+        if numperline >= 15:
+          print()
+          print("  ",end="")
+          numperline = 0
+        print("0x{:02X},".format(encpixel[1]),end="")
+        remaindernibble = None
+        numperline = numperline + 1
+      else:
+        print("0x{:02X},".format((pixelcolor<<4) | pixelcountmsb),end="")
+        remaindernibble = pixelcountlsb
+        numperline = numperline + 1
+      if numperline >= 15:
         print()
         print("  ",end="")
         numperline = 0
+    if remaindernibble is not None:
+      print("0x{:02X},".format((remaindernibble<<4)),end="")
 
     print()
     print("};")
@@ -78,7 +101,7 @@ try:
 except EOFError:
   pass # No more frames in GIF
 
-print("const uint16_t* cat{}_frames[{}] = {{".format(reduction,frame))
+print("const uint8_t* cat{}_frames[{}] = {{".format(reduction,frame))
 
 for f in range(frame):
   print("  cat{}_frame{},".format(reduction,f))
